@@ -1,21 +1,28 @@
 use teloxide::{prelude::*, utils::command::BotCommands};
 
 #[tokio::main]
-fn main() {
+async fn main() {
     pretty_env_logger::init();
     log::info!("Starting yout favourite study bot...");
 
     let bot = Bot::from_env();
 
-    Command::repl(bot, ansewr).await
+    Command::repl(bot, answer).await
 }
 
 #[derive(BotCommands, Clone)]
-#[command(rename_rule = "lowercase", description = "These commands are supported:")]
+#[command(
+    rename_rule = "lowercase",
+    description = "These commands are supported:"
+)]
 enum Command {
     #[command(description = "display this text.")]
     Help,
-    #[command(description = "create and save a flashcard.")]
+    #[command(
+        description = "create and save a flashcard.",
+        parse_with = "split",
+        separator = "|"
+    )]
     FlashCard { question: String, answer: String },
     #[command(description = "start a quiz using uploaded flashcards.")]
     Quiz,
@@ -24,11 +31,16 @@ enum Command {
     #[command(description = "summarize given text.")]
     Summarize(String),
     #[command(description = "explain a concept.")]
-    Explain(String)
+    Explain(String),
 }
 
-async fn answerr(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
+async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
     match cmd {
-    }
+        Command::Help => {
+            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+                .await?
+        }
+        _ => (),
+    };
     Ok(())
 }
