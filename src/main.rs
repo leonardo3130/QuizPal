@@ -1,5 +1,8 @@
 use teloxide::{prelude::*, utils::command::BotCommands};
 
+pub mod constants;
+pub mod requests;
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -40,6 +43,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
                 .await?
         }
+        Command::Summarize(text) => {}
         _ => (),
     };
     Ok(())
