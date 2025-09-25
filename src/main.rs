@@ -43,8 +43,14 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
                 .await?
         }
-        Command::Summarize(text) => {}
-        _ => (),
+        Command::Summarize(_) => {
+            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+                .await?
+        }
+        _ => {
+            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+                .await?
+        }
     };
     Ok(())
 }
