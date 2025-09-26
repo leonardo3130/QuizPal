@@ -47,6 +47,8 @@ pub async fn request(text: &str, a: Actions) -> Result<ModelAnswer, RequestError
     let action: &str;
     let config = load_config();
 
+    info!("{}", text);
+
     match a {
         Actions::Summarize => action = "Summarize the below text:",
         Actions::Explain => action = "Explain the following concept:",

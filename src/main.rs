@@ -23,21 +23,21 @@ struct Config {
 enum Command {
     #[command(description = "display this text.")]
     Help,
-    #[command(
-        description = "create and save a flashcard.",
-        parse_with = "split",
-        separator = "|"
-    )]
+    // #[command(
+    //     description = "create and save a flashcard.",
+    //     parse_with = "split",
+    //     separator = "|"
+    // )]
     // #[command(description = "upload a flashcard.", separator = "|", s)]
     // FlashCard { question: String, answer: String },
     // #[command(description = "start a quiz using uploaded flashcards.")]
     // Quiz,
     // #[command(description = "review flashcards using space repetition.")]
     // Review,
-    #[command(description = "summarize given text.")]
-    Summarize(String),
     #[command(description = "explain a concept.")]
     Explain(String),
+    #[command(description = "summarize given text.")]
+    Summarize(String),
 }
 
 pub enum Actions {
@@ -69,6 +69,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 .await?
         }
         Command::Summarize(text) => {
+            info!("{}", text);
             let result: Result<requests::ModelAnswer, requests::RequestError> =
                 requests::request(text.as_str(), Actions::Summarize).await;
 
