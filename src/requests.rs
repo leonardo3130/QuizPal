@@ -2,15 +2,15 @@ use crate::{constants, Actions};
 use serde_json;
 
 #[derive(Debug)]
-enum ExtractError<'a> {
-    MissingField(&'a str),
-    WrongType(&'a str),
+enum ExtractError {
+    MissingField(()),
+    WrongType(()),
 }
 
 // convert from serde_json::Error
-impl<'a> From<serde_json::Error> for ExtractError<'a> {
+impl From<serde_json::Error> for ExtractError {
     fn from(_: serde_json::Error) -> Self {
-        ExtractError::WrongType("invalid JSON")
+        ExtractError::WrongType(())
     }
 }
 
@@ -19,11 +19,11 @@ pub struct ModelAnswer {
     pub content: String,
 }
 
-fn extract_answer(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
+fn extract_answer<'a>(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
     let id = v
         .get("id")
         .and_then(|x| x.as_str())
-        .ok_or(ExtractError::MissingField("id"))?;
+        .ok_or(ExtractError::MissingField(()))?;
 
     let content = v
         .get("choices")
@@ -31,7 +31,7 @@ fn extract_answer(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
             c.get("message")
                 .and_then(|m| m.get("content").and_then(|c| c.as_str()))
         })
-        .ok_or(ExtractError::MissingField("content"))?;
+        .ok_or(ExtractError::MissingField(()))?;
 
     Ok(ModelAnswer {
         id: id.to_string(),
