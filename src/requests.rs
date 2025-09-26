@@ -1,24 +1,22 @@
-use std::str::FromStr;
-
-use crate::constants;
+use crate::{constants, Actions};
 use serde_json;
 
 #[derive(Debug)]
-enum ExtractError {
-    MissingField(&'static str),
-    WrongType(&'static str),
+enum ExtractError<'a> {
+    MissingField(&'a str),
+    WrongType(&'a str),
 }
 
 // convert from serde_json::Error
-impl From<serde_json::Error> for ExtractError {
+impl<'a> From<serde_json::Error> for ExtractError<'a> {
     fn from(_: serde_json::Error) -> Self {
         ExtractError::WrongType("invalid JSON")
     }
 }
 
-struct ModelAnswer {
-    id: String,
-    content: String,
+pub struct ModelAnswer {
+    pub id: String,
+    pub content: String,
 }
 
 fn extract_answer(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
@@ -27,13 +25,28 @@ fn extract_answer(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
         .and_then(|x| x.as_str())
         .ok_or(ExtractError::MissingField("id"))?;
 
+    let content = v
+        .get("choices")
+        .and_then(|c| {
+            c.get("message")
+                .and_then(|m| m.get("content").and_then(|c| c.as_str()))
+        })
+        .ok_or(ExtractError::MissingField("content"))?;
+
     Ok(ModelAnswer {
         id: id.to_string(),
-        content: String::from_str("dd").unwrap(),
+        content: content.to_string(),
     })
 }
 
-async fn summarize(text: &str) -> Option<ModelAnswer> {
+pub async fn request(text: &str, a: Actions) -> Option<ModelAnswer> {
+    let action: &str;
+
+    match a {
+        Actions::Summarize => action = "Summarize the below text:",
+        Actions::Explain => action = "Explain the following concept:",
+    }
+
     let response: serde_json::Value = reqwest::Client::new()
         .post(constants::LLM_API_URL)
         .json(&serde_json::json!({
@@ -44,7 +57,7 @@ async fn summarize(text: &str) -> Option<ModelAnswer> {
             },
             {
               "role": "user",
-              "content": text
+              "content": format!("{}\n{}",action, text)
             }
           ],
           "model": constants::MODEL,
@@ -61,7 +74,9 @@ async fn summarize(text: &str) -> Option<ModelAnswer> {
         .await
         .ok()?;
 
-    match extract_answer(&response) {
+    let model_answer = extract_answer(&response);
+
+    match model_answer {
         Ok(v) => Some(v),
         Err(_) => None,
     }

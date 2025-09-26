@@ -26,15 +26,21 @@ enum Command {
         parse_with = "split",
         separator = "|"
     )]
-    FlashCard { question: String, answer: String },
-    #[command(description = "start a quiz using uploaded flashcards.")]
-    Quiz,
-    #[command(description = "review flashcards using space repetition.")]
-    Review,
+    // #[command(description = "upload a flashcard.", separator = "|", s)]
+    // FlashCard { question: String, answer: String },
+    // #[command(description = "start a quiz using uploaded flashcards.")]
+    // Quiz,
+    // #[command(description = "review flashcards using space repetition.")]
+    // Review,
     #[command(description = "summarize given text.")]
     Summarize(String),
     #[command(description = "explain a concept.")]
     Explain(String),
+}
+
+pub enum Actions {
+    Summarize,
+    Explain,
 }
 
 async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
@@ -43,14 +49,33 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
                 .await?
         }
-        Command::Summarize(_) => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
-                .await?
+        Command::Summarize(text) => {
+            let result: Option<requests::ModelAnswer> =
+                requests::request(text.as_str(), Actions::Summarize).await;
+
+            match result {
+                Some(v) => bot.send_message(msg.chat.id, v.content).await?,
+                None => {
+                    bot.send_message(msg.chat.id, "Error while processign your request")
+                        .await?
+                }
+            }
         }
-        _ => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
-                .await?
-        }
+        Command::Explain(text) => {
+            let result: Option<requests::ModelAnswer> =
+                requests::request(text.as_str(), Actions::Explain).await;
+
+            match result {
+                Some(v) => bot.send_message(msg.chat.id, v.content).await?,
+                None => {
+                    bot.send_message(msg.chat.id, "Error while processign your request")
+                        .await?
+                }
+            }
+        } // _ => {
+          //     bot.send_message(msg.chat.id, Command::descriptions().to_string())
+          //         .await?
+          // }
     };
     Ok(())
 }
