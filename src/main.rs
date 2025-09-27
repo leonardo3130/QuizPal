@@ -9,6 +9,7 @@ extern crate log;
 
 pub mod constants;
 pub mod db;
+pub mod parsers;
 pub mod requests;
 
 #[derive(Deserialize)]
@@ -25,16 +26,16 @@ struct Config {
 enum Command {
     #[command(description = "display this text.")]
     Help,
-    // #[command(
-    //     description = "create and save a flashcard.",
-    //     parse_with = "split",
-    //     separator = "|"
-    // )]
-    // FlashCard { question: String, answer: String },
-    // #[command(description = "start a quiz using uploaded flashcards.")]
-    // Quiz,
-    // #[command(description = "review flashcards using space repetition.")]
-    // Review,
+    #[command(
+        description = "create and save a flashcard.",
+        parse_with = parsers::parse_four_delimited_strings
+    )]
+    FlashCard {
+        question: String,
+        answer: String,
+        topic: String,
+        difficulty: u64,
+    },
     #[command(
         description = "register yourself so you can keep track of flshcards and review sessions."
     )]
@@ -43,6 +44,10 @@ enum Command {
     Explain(String),
     #[command(description = "summarize given text.")]
     Summarize(String),
+    // #[command(description = "start a quiz using uploaded flashcards.")]
+    // Quiz,
+    // #[command(description = "review flashcards using space repetition.")]
+    // Review,
 }
 
 pub enum Actions {
@@ -168,6 +173,67 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         .await?
                     }
                 },
+            }
+        }
+        Command::FlashCard {
+            question,
+            answer,
+            topic,
+            difficulty,
+        } => {
+            let sender = msg.from;
+
+            match sender {
+                Some(u) => {
+                    {
+                        let db = db::get_db();
+
+                        let query = "SELECT id FROM users WHERE id = ?";
+                        let mut user_stmt = db.prepare(query).unwrap();
+                        user_stmt.bind((1, u.id.0.to_string().as_str())).unwrap();
+
+                        if user_stmt.next().is_ok() {
+                            let mut statement = db
+                            .prepare("INSERT INTO flashcards (question, answer, topic, difficulty) VALUES (?,?,?,?)")
+                            .unwrap();
+
+                            statement.bind((1, question.as_str())).unwrap();
+                            statement.bind((2, answer.as_str())).unwrap();
+                            statement.bind((3, topic.as_str())).unwrap();
+                            statement
+                                .bind((4, difficulty.to_string().as_str()))
+                                .unwrap();
+
+                            while let Ok(sqlite::State::Row) = statement.next() {
+                                debug!(
+                                    "question = {}",
+                                    statement.read::<String, _>("question").unwrap()
+                                );
+                                debug!(
+                                    "answer = {}",
+                                    statement.read::<String, _>("answer").unwrap()
+                                );
+                                debug!("topic = {}", statement.read::<String, _>("topic").unwrap());
+                                debug!(
+                                    "difficulty = {}",
+                                    statement.read::<i64, _>("difficulty").unwrap()
+                                );
+                            }
+                        } else {
+                            error!("user not found");
+                        }
+                    };
+
+                    bot.send_message(msg.chat.id, format!("You successfully created a flashcard"))
+                        .await?
+                }
+                None => {
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("User ID not available, couldn't create flashcard"),
+                    )
+                    .await?
+                }
             }
         }
     };
