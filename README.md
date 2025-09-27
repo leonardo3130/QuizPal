@@ -1,7 +1,13 @@
-# 📚 Study Helper Bot – Command Reference
+> 🚧 **Work In Progress**
+>
+> This section/document/project is currently under active development.  
+> Features, content, and structure may change frequently.  
+> Please check back later for updates!
 
-This bot helps you learn smarter with flashcards, quizzes, summaries, and explanations.
-Below is the list of available commands.
+# 📚 Study Helper Bot – Command Reference
+Simple bot to help you with your studies, built to learn (it's going really bad) the Rust programming language.
+
+In the following sections you will find some beautiful commands descriptions created by Geminone.
 
 ---
 
