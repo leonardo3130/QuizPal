@@ -1,3 +1,4 @@
+use chrono::Local;
 use serde::Deserialize;
 use std::fs;
 use teloxide::{prelude::*, utils::command::BotCommands};
@@ -7,6 +8,7 @@ extern crate pretty_env_logger;
 extern crate log;
 
 pub mod constants;
+pub mod db;
 pub mod requests;
 
 #[derive(Deserialize)]
@@ -28,12 +30,15 @@ enum Command {
     //     parse_with = "split",
     //     separator = "|"
     // )]
-    // #[command(description = "upload a flashcard.", separator = "|", s)]
     // FlashCard { question: String, answer: String },
     // #[command(description = "start a quiz using uploaded flashcards.")]
     // Quiz,
     // #[command(description = "review flashcards using space repetition.")]
     // Review,
+    #[command(
+        description = "register yourself so you can keep track of flshcards and review sessions."
+    )]
+    Register,
     #[command(description = "explain a concept.")]
     Explain(String),
     #[command(description = "summarize given text.")]
@@ -59,7 +64,7 @@ async fn main() {
 
     let bot = Bot::new(config.tg_key);
 
-    Command::repl(bot, answer).await
+    Command::repl(bot, answer).await;
 }
 
 async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
@@ -67,6 +72,54 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
         Command::Help => {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
                 .await?
+        }
+        Command::Register => {
+            let sender = msg.from;
+
+            match sender {
+                Some(u) => {
+                    // additional block to drop mutex before calling await
+                    {
+                        let db = db::get_db();
+                        let mut statement = db
+                            .prepare("INSERT INTO users (id, username, joined_at) VALUES (?,?,?)")
+                            .unwrap();
+
+                        statement.bind((1, u.id.to_string().as_str())).unwrap();
+                        statement
+                            .bind((
+                                2,
+                                u.username
+                                    .unwrap_or(String::from("anonymous_user"))
+                                    .as_str(),
+                            ))
+                            .unwrap();
+                        statement
+                            .bind((3, Local::now().to_rfc3339().as_str()))
+                            .unwrap();
+                        while let Ok(sqlite::State::Row) = statement.next() {
+                            debug!("id = {}", statement.read::<i64, _>("id").unwrap());
+                            debug!(
+                                "username = {}",
+                                statement.read::<String, _>("username").unwrap()
+                            );
+                            debug!(
+                                "joined on {}",
+                                statement.read::<String, _>("joined_at").unwrap()
+                            );
+                        }
+                    }
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("You successfully registered on quiz pal"),
+                    )
+                    .await?
+                }
+                None => {
+                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
+                        .await?
+                }
+            }
         }
         Command::Summarize(text) => {
             info!("{}", text);
@@ -77,7 +130,6 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
-                        // maybe retry, map to StatusCode::BAD_GATEWAY, etc.
                         bot.send_message(
                             msg.chat.id,
                             format!("Error while processign your request {}", e),
@@ -90,7 +142,6 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                             format!("Error while processign your request {}", e),
                         )
                         .await?
-                        // maybe return StatusCode::UNPROCESSABLE_ENTITY, etc.
                     }
                 },
             }
@@ -103,7 +154,6 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
-                        // maybe retry, map to StatusCode::BAD_GATEWAY, etc.
                         bot.send_message(
                             msg.chat.id,
                             format!("Error while processign your request {}", e),
@@ -116,7 +166,6 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                             format!("Error while processign your request {}", e),
                         )
                         .await?
-                        // maybe return StatusCode::UNPROCESSABLE_ENTITY, etc.
                     }
                 },
             }
