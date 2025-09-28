@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::Deserialize;
 use std::fs;
-use teloxide::{prelude::*, utils::command::BotCommands};
+use teloxide::{prelude::*, types::ParseMode, utils::command::BotCommands};
 
 extern crate pretty_env_logger;
 #[macro_use]
@@ -11,6 +11,7 @@ pub mod constants;
 pub mod db;
 pub mod parsers;
 pub mod requests;
+pub mod utils;
 
 #[derive(Deserialize)]
 struct Config {
@@ -141,7 +142,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 requests::request(text.as_str(), Actions::Summarize).await;
 
             match result {
-                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Ok(v) => {
+                    bot.send_message(msg.chat.id, utils::escape_md_v2(&v.content).as_str())
+                        .parse_mode(ParseMode::MarkdownV2)
+                        .await?
+                }
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
                         bot.send_message(
@@ -165,7 +170,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 requests::request(text.as_str(), Actions::Explain).await;
 
             match result {
-                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Ok(v) => {
+                    bot.send_message(msg.chat.id, utils::escape_md_v2(&v.content).as_str())
+                        .parse_mode(ParseMode::MarkdownV2)
+                        .await?
+                }
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
                         bot.send_message(
@@ -189,7 +198,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 requests::request(text.as_str(), Actions::Define).await;
 
             match result {
-                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Ok(v) => {
+                    bot.send_message(msg.chat.id, utils::escape_md_v2(&v.content).as_str())
+                        .parse_mode(ParseMode::MarkdownV2)
+                        .await?
+                }
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
                         bot.send_message(
@@ -201,7 +214,10 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     requests::RequestError::Extract(e) => {
                         bot.send_message(
                             msg.chat.id,
-                            format!("Error while processign your request {}", e),
+                            format!(
+                                "Error while processign yourconvert char to &str rust request {}",
+                                e
+                            ),
                         )
                         .await?
                     }
@@ -216,7 +232,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             .await;
 
             match result {
-                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Ok(v) => {
+                    bot.send_message(msg.chat.id, utils::escape_md_v2(&v.content).as_str())
+                        .parse_mode(ParseMode::MarkdownV2)
+                        .await?
+                }
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
                         bot.send_message(
@@ -243,7 +263,11 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             .await;
 
             match result {
-                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Ok(v) => {
+                    bot.send_message(msg.chat.id, utils::escape_md_v2(&v.content).as_str())
+                        .parse_mode(ParseMode::MarkdownV2)
+                        .await?
+                }
                 Err(error) => match error {
                     requests::RequestError::Http(e) => {
                         bot.send_message(
