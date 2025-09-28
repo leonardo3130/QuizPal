@@ -37,11 +37,17 @@ enum Command {
         difficulty: u64,
     },
     #[command(
-        description = "register yourself so you can keep track of flshcards and review sessions."
+        description = "Register yourself so you can keep track of flshcards and review sessions."
     )]
     Register,
-    #[command(description = "explain a concept.")]
+    #[command(description = "Explain a concept.")]
     Explain(String),
+    #[command(description = "Define a concept.")]
+    Define(String),
+    #[command(description = "Translate a text.", parse_with = parsers::parse_two_delimited_strings)]
+    Translate { language: String, text: String },
+    #[command(description = "Compare 2 concepts", parse_with = parsers::parse_two_delimited_strings)]
+    Compare { concept1: String, concept2: String },
     #[command(description = "summarize given text.")]
     Summarize(String),
     // #[command(description = "start a quiz using uploaded flashcards.")]
@@ -53,6 +59,9 @@ enum Command {
 pub enum Actions {
     Summarize,
     Explain,
+    Define,
+    Translate,
+    Compare,
 }
 
 fn load_config() -> Config {
@@ -154,6 +163,84 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
         Command::Explain(text) => {
             let result: Result<requests::ModelAnswer, requests::RequestError> =
                 requests::request(text.as_str(), Actions::Explain).await;
+
+            match result {
+                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Err(error) => match error {
+                    requests::RequestError::Http(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                    requests::RequestError::Extract(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                },
+            }
+        }
+        Command::Define(text) => {
+            let result: Result<requests::ModelAnswer, requests::RequestError> =
+                requests::request(text.as_str(), Actions::Define).await;
+
+            match result {
+                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Err(error) => match error {
+                    requests::RequestError::Http(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                    requests::RequestError::Extract(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                },
+            }
+        }
+        Command::Translate { language, text } => {
+            let result: Result<requests::ModelAnswer, requests::RequestError> = requests::request(
+                format!("Translate text in {}\nText: {}\n", language, text).as_str(),
+                Actions::Translate,
+            )
+            .await;
+
+            match result {
+                Ok(v) => bot.send_message(msg.chat.id, v.content).await?,
+                Err(error) => match error {
+                    requests::RequestError::Http(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                    requests::RequestError::Extract(e) => {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("Error while processign your request {}", e),
+                        )
+                        .await?
+                    }
+                },
+            }
+        }
+        Command::Compare { concept1, concept2 } => {
+            let result: Result<requests::ModelAnswer, requests::RequestError> = requests::request(
+                format!("First concept {}\nSecond concept: {}\n", concept1, concept2).as_str(),
+                Actions::Compare,
+            )
+            .await;
 
             match result {
                 Ok(v) => bot.send_message(msg.chat.id, v.content).await?,

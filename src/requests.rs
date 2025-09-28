@@ -52,6 +52,14 @@ pub async fn request(text: &str, a: Actions) -> Result<ModelAnswer, RequestError
     match a {
         Actions::Summarize => action = "Summarize the below text:",
         Actions::Explain => action = "Explain the following concept:",
+        Actions::Define => {
+            action = "Provide a formal and short definition for the following concept:"
+        }
+        Actions::Translate => action = "Translate the provided text into the provided language",
+        Actions::Compare => {
+            action =
+                "Compare the following concepts, highlighting the similiraties and differences."
+        }
     }
 
     let response: serde_json::Value = reqwest::Client::new()

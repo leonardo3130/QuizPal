@@ -5,6 +5,7 @@
 > Please check back later for updates!
 
 # 📚 Study Helper Bot – Command Reference
+
 Simple bot to help you with your studies, built to learn (it's going really bad) the Rust programming language.
 
 In the following sections you will find some beautiful commands descriptions created by Geminone.
@@ -12,6 +13,7 @@ In the following sections you will find some beautiful commands descriptions cre
 ---
 
 ## 🔹 Core Commands
+
 - **`/flashcard <question> | <answer>`**
   Save a flashcard.
   Example: `/flashcard Capital of France | Paris`
@@ -32,6 +34,7 @@ In the following sections you will find some beautiful commands descriptions cre
 ---
 
 ## 🔹 Advanced Commands
+
 - **`/testme <topic>`**
   Generate a short practice test (MCQs, T/F, short answers).
 
@@ -53,6 +56,7 @@ In the following sections you will find some beautiful commands descriptions cre
 ---
 
 ## 🔹 Knowledge & Progress
+
 - **`/import`**
   Upload a PDF, DOCX, or TXT to add to your study library.
 
@@ -62,13 +66,3 @@ In the following sections you will find some beautiful commands descriptions cre
 
 - **`/stats`**
   Show study progress (accuracy %, flashcards mastered, quizzes taken).
-
----
-
-## 🔹 Fun & Engagement
-- **`/challenge @username`**
-  Start a quiz challenge with a friend in the same group.
-
-- **`/dailyfact`**
-  Receive a daily fact or mini quiz to stay engaged.
-

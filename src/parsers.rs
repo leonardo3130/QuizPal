@@ -25,3 +25,19 @@ pub fn parse_four_delimited_strings(
         })
     }
 }
+
+pub fn parse_two_delimited_strings(
+    input: String,
+) -> Result<(String, String), teloxide::utils::command::ParseError> {
+    let parts: Vec<String> = input.split('|').map(|s| s.trim().to_string()).collect();
+
+    if parts.len() == 2 {
+        Ok((parts[0].clone(), parts[1].clone()))
+    } else {
+        Err(teloxide::utils::command::ParseError::TooFewArguments {
+            expected: 4,
+            found: parts.len(),
+            message: "Please, provide correct number of parameters".to_string(),
+        })
+    }
+}
