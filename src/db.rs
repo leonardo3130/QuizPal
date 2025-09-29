@@ -2,9 +2,6 @@ use once_cell::sync::Lazy;
 use sqlite::Connection;
 use std::sync::Mutex;
 
-// ---------------------
-// DB Initialization
-// ---------------------
 fn init_db() -> Connection {
     let connection = sqlite::open("database.db").unwrap();
 
@@ -54,9 +51,7 @@ fn init_db() -> Connection {
     connection
 }
 
-// ---------------------
 // Singleton DB Access
-// ---------------------
 static DB_CONNECTION: Lazy<Mutex<Connection>> = Lazy::new(|| {
     let conn = init_db();
     Mutex::new(conn)
