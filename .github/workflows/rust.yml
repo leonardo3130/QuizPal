@@ -1,20 +1,42 @@
-name: Rust
+name: Rust + Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --verbose
+
+      # - name: Run tests
+      #   run: cargo test --verbose
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          since_last_remote_commit: true
+          separator: ","
+
+      - name: Copy changed files to deploy folder
+        run: | # | means multiline
+          echo "Changed files: ${{ steps.changed-files.outputs.all_changed_files }}"
+          mkdir -p /home/pi/deploy-folder
+          cp --parents ${{ steps.changed-files.outputs.all_changed_files }} /home/pi/deploy-folder
