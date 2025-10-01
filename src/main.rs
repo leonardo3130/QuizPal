@@ -3,6 +3,8 @@ use serde::Deserialize;
 use std::fs;
 use teloxide::{prelude::*, types::ParseMode, utils::command::BotCommands};
 
+use crate::types::FlashCardData;
+
 extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
@@ -11,6 +13,7 @@ pub mod constants;
 pub mod db;
 pub mod parsers;
 pub mod requests;
+pub mod types;
 pub mod utils;
 
 #[derive(Deserialize)]
@@ -51,6 +54,8 @@ enum Command {
     Compare { concept1: String, concept2: String },
     #[command(description = "summarize given text.")]
     Summarize(String),
+    #[command(description = "List all falshcards available for a given topic")]
+    List(String),
     // #[command(description = "Start a quiz using uploaded flashcards on a specific topic.")]
     // Quiz(String),
     // #[command(description = "review flashcards using space repetition.")]
@@ -353,54 +358,89 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     .await?
                 }
             }
-        } // Command::Quiz(_) => {
-          //     let sender = msg.from;
-          //
-          //     match sender {
-          //         Some(u) => {
-          //             // additional block to drop mutex before calling await
-          //             {
-          //                 let db = db::get_db();
-          //                 let mut statement = db
-          //                     .prepare("INSERT INTO users (id, username, joined_at) VALUES (?,?,?)")
-          //                     .unwrap();
-          //
-          //                 statement.bind((1, u.id.to_string().as_str())).unwrap();
-          //                 statement
-          //                     .bind((
-          //                         2,
-          //                         u.username
-          //                             .unwrap_or(String::from("anonymous_user"))
-          //                             .as_str(),
-          //                     ))
-          //                     .unwrap();
-          //                 statement
-          //                     .bind((3, Local::now().to_rfc3339().as_str()))
-          //                     .unwrap();
-          //                 while let Ok(sqlite::State::Row) = statement.next() {
-          //                     debug!("id = {}", statement.read::<i64, _>("id").unwrap());
-          //                     debug!(
-          //                         "username = {}",
-          //                         statement.read::<String, _>("username").unwrap()
-          //                     );
-          //                     debug!(
-          //                         "joined on {}",
-          //                         statement.read::<String, _>("joined_at").unwrap()
-          //                     );
-          //                 }
-          //             }
-          //             bot.send_message(
-          //                 msg.chat.id,
-          //                 format!("You successfully registered on quiz pal"),
-          //             )
-          //             .await?
-          //         }
-          //         None => {
-          //             bot.send_message(msg.chat.id, format!("Error while processign your request "))
-          //                 .await?
-          //         }
-          //     }
-          // }
+        }
+        Command::List(topic) => {
+            let sender = msg.from;
+
+            match sender {
+                Some(u) => {
+                    let cards: Vec<FlashCardData> = {
+                        let db = db::get_db();
+                        let mut statement = db
+                            .prepare(
+                                "
+                                SELECT question, answer, difficulty
+                                WHERE topic = ? AND user_id = ?
+                                ORDER BY difficulty
+                                ",
+                            )
+                            .unwrap();
+
+                        statement.bind((1, u.id.to_string().as_str())).unwrap();
+                        statement.bind((2, topic.as_str())).unwrap();
+
+                        let mut rows: Vec<types::FlashCardData> = Vec::new();
+
+                        loop {
+                            match statement.next() {
+                                Ok(sqlite::State::Row) => {
+                                    debug!(
+                                        "question = {}",
+                                        statement.read::<String, _>("question").unwrap()
+                                    );
+                                    debug!(
+                                        "answer = {}",
+                                        statement.read::<String, _>("answrr").unwrap()
+                                    );
+                                    debug!(
+                                        "difficulty = {}",
+                                        statement.read::<i64, _>("difficulty").unwrap()
+                                    );
+
+                                    rows.push(FlashCardData {
+                                        question: statement.read::<String, _>("question").unwrap(),
+                                        answer: statement.read::<String, _>("question").unwrap(),
+                                        difficulty: statement.read::<i64, _>("difficulty").unwrap(),
+                                    });
+                                }
+                                Ok(sqlite::State::Done) => break,
+                                Err(_) => break,
+                            }
+                        }
+
+                        rows
+                    };
+
+                    let mut message: String = String::from("");
+
+                    if cards.len() == 0 {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("No flashcards found for topic {}", topic),
+                        )
+                        .await?;
+                    }
+
+                    for (i, card) in cards.iter().enumerate() {
+                        message.push_str(
+                            format!(
+                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}",
+                                i + 1,
+                                card.question,
+                                card.answer,
+                                card.difficulty
+                            )
+                            .as_str(),
+                        )
+                    }
+                    bot.send_message(msg.chat.id, message).await?
+                }
+                None => {
+                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
+                        .await?
+                }
+            }
+        }
     };
     Ok(())
 }
