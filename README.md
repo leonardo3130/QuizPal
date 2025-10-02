@@ -18,11 +18,11 @@ In the following sections you will find some beautiful commands descriptions cre
   Save a flashcard.
   Example: `/flashcard Capital of France | Paris`
 
+- **`/list <topic>`**
+  List all saved flashcards for a topic.
+
 - **`/quiz`**
   Start a quiz session with your saved flashcards.
-
-- **`/review`**
-  Review flashcards using spaced repetition.
 
 - **`/summarize <text>`**
   Summarize pasted text, notes, or documents.
@@ -34,9 +34,6 @@ In the following sections you will find some beautiful commands descriptions cre
 ---
 
 ## 🔹 Advanced Commands
-
-- **`/testme <topic>`**
-  Generate a short practice test (MCQs, T/F, short answers).
 
 - **`/mindmap <topic>`**
   Break a concept into a structured overview or text-based mindmap.
@@ -63,6 +60,3 @@ In the following sections you will find some beautiful commands descriptions cre
 - **`/ask <question>`**
   Ask questions about your uploaded documents.
   Example: `/ask What are the key themes in Chapter 3?`
-
-- **`/stats`**
-  Show study progress (accuracy %, flashcards mastered, quizzes taken).

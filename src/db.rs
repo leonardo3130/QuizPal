@@ -19,33 +19,23 @@ fn init_db() -> Connection {
         answer TEXT NOT NULL,
         topic TEXT NOT NULL,
         difficulty INTEGER DEFAULT 0,
-        interval_days INTEGER DEFAULT 1,
-        next_review_date DATE DEFAULT CURRENT_DATE,
-        times_reviewed INTEGER DEFAULT 0,
-        last_reviewed DATE,
+        last_quiz_time DATE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
-    CREATE TABLE IF NOT EXISTS quizzes (
+    CREATE TABLE IF NOT EXISTS quiz_reports (
         quiz_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         topic TEXT,
         score INTEGER,
         total_questions INTEGER,
+        answered_questions INTEGER,
         taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_over BOOLEAN,
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
-    CREATE TABLE IF NOT EXISTS review_logs (
-        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        card_id INTEGER NOT NULL,
-        was_correct BOOLEAN,
-        reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (card_id) REFERENCES flashcards(card_id)
-    );
     ";
     connection.execute(query).unwrap();
     connection

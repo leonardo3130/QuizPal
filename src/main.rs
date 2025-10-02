@@ -56,10 +56,10 @@ enum Command {
     Summarize(String),
     #[command(description = "List all falshcards available for a given topic")]
     List(String),
-    // #[command(description = "Start a quiz using uploaded flashcards on a specific topic.")]
-    // Quiz(String),
-    // #[command(description = "review flashcards using space repetition.")]
-    // Review,
+    #[command(description = "Start a quiz using uploaded flashcards on a specific topic.")]
+    Quiz(String),
+    #[command(description = "Exit a quiz.")]
+    Stop,
 }
 
 pub enum Actions {
@@ -440,6 +440,92 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         .await?
                 }
             }
+        }
+        Command::Quiz(topic) => {
+            let sender = msg.from;
+
+            match sender {
+                Some(u) => {
+                    let cards: Vec<FlashCardData> = {
+                        let db = db::get_db();
+                        let mut statement = db
+                            .prepare(
+                                "
+                                SELECT question, answer, difficulty
+                                WHERE topic = ? AND user_id = ?
+                                ORDER BY difficulty
+                                ",
+                            )
+                            .unwrap();
+
+                        statement.bind((1, u.id.to_string().as_str())).unwrap();
+                        statement.bind((2, topic.as_str())).unwrap();
+
+                        let mut rows: Vec<types::FlashCardData> = Vec::new();
+
+                        loop {
+                            match statement.next() {
+                                Ok(sqlite::State::Row) => {
+                                    debug!(
+                                        "question = {}",
+                                        statement.read::<String, _>("question").unwrap()
+                                    );
+                                    debug!(
+                                        "answer = {}",
+                                        statement.read::<String, _>("answrr").unwrap()
+                                    );
+                                    debug!(
+                                        "difficulty = {}",
+                                        statement.read::<i64, _>("difficulty").unwrap()
+                                    );
+
+                                    rows.push(FlashCardData {
+                                        question: statement.read::<String, _>("question").unwrap(),
+                                        answer: statement.read::<String, _>("question").unwrap(),
+                                        difficulty: statement.read::<i64, _>("difficulty").unwrap(),
+                                    });
+                                }
+                                Ok(sqlite::State::Done) => break,
+                                Err(_) => break,
+                            }
+                        }
+
+                        rows
+                    };
+
+                    let mut message: String = String::from("");
+
+                    if cards.len() == 0 {
+                        bot.send_message(
+                            msg.chat.id,
+                            format!("No flashcards found for topic {}", topic),
+                        )
+                        .await?;
+                    }
+
+                    for (i, card) in cards.iter().enumerate() {
+                        message.push_str(
+                            format!(
+                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}",
+                                i + 1,
+                                card.question,
+                                card.answer,
+                                card.difficulty
+                            )
+                            .as_str(),
+                        )
+                    }
+                    bot.send_message(msg.chat.id, message).await?
+                }
+                None => {
+                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
+                        .await?
+                }
+            }
+        }
+        Command::Stop => {
+            bot.send_message(msg.chat.id, format!("Quiz stopped"))
+                .await?
         }
     };
     Ok(())
