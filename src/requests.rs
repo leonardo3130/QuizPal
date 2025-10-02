@@ -29,7 +29,6 @@ fn extract_answer(v: &serde_json::Value) -> Result<ModelAnswer, ExtractError> {
         .and_then(|x| x.as_str())
         .ok_or(ExtractError::MissingField)?;
 
-    // OpenAI-style responses have choices as an array, so check index 0
     let content = v
         .get("choices")
         .and_then(|c| c.get(0))

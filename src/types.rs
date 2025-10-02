@@ -2,17 +2,20 @@ use crate::db;
 
 use sqlite::State;
 
+#[derive(Clone)]
 pub struct FlashCardData {
     pub difficulty: i64,
     pub answer: String,
     pub question: String,
 }
 
+#[derive(Clone)]
 pub struct QuizData {
     user_id: i64,
     topic: String,
 }
 
+#[derive(Clone)]
 pub struct QuizManager {
     info: QuizData,
     current: usize,
@@ -64,12 +67,15 @@ impl QuizManager {
         }
     }
 
-    pub fn next_question(&mut self) -> Option<&FlashCardData> {
+    pub fn next_question(&mut self) -> Result<Option<&FlashCardData>, sqlite::Error> {
         if self.current + 1 >= self.cards.len() {
-            return None;
+            return match self.save_quiz_result() {
+                Ok(_) => Ok(None),
+                Err(e) => Err(e),
+            };
         }
         self.current += 1;
-        Some(self.cards.get(self.current).unwrap())
+        Ok(self.cards.get(self.current))
     }
 
     pub fn check_answer(&mut self, input: &str) -> bool {

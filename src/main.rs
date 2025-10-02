@@ -1,9 +1,14 @@
 use chrono::Local;
 use serde::Deserialize;
 use std::fs;
-use teloxide::{prelude::*, types::ParseMode, utils::command::BotCommands};
+use teloxide::{
+    dispatching::dialogue::InMemStorage, prelude::*, types::ParseMode, utils::command::BotCommands,
+};
 
-use crate::types::FlashCardData;
+type QuizDialogue = Dialogue<QuizManager, InMemStorage<QuizManager>>;
+type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+use crate::types::{FlashCardData, QuizManager};
 
 extern crate pretty_env_logger;
 #[macro_use]
@@ -27,11 +32,12 @@ struct Config {
     rename_rule = "lowercase",
     description = "These commands are supported:"
 )]
+
 enum Command {
-    #[command(description = "display this text.")]
+    #[command(description = "ℹ️ Display this help menu.")]
     Help,
     #[command(
-        description = "create and save a flashcard.",
+        description = "📝 Create and save a flashcard ✨",
         parse_with = parsers::parse_four_delimited_strings
     )]
     FlashCard {
@@ -40,25 +46,23 @@ enum Command {
         topic: String,
         difficulty: u64,
     },
-    #[command(
-        description = "Register yourself so you can keep track of flshcards and review sessions."
-    )]
+    #[command(description = "🧑‍💻 Register yourself to track flashcards & review sessions 📚")]
     Register,
-    #[command(description = "Explain a concept.")]
+    #[command(description = "💡 Explain a concept in simple terms.")]
     Explain(String),
-    #[command(description = "Define a concept.")]
+    #[command(description = "📖 Define a concept clearly.")]
     Define(String),
-    #[command(description = "Translate a text.", parse_with = parsers::parse_two_delimited_strings)]
+    #[command(description = "🌍 Translate text into another language 🗣️", parse_with = parsers::parse_two_delimited_strings)]
     Translate { language: String, text: String },
-    #[command(description = "Compare 2 concepts", parse_with = parsers::parse_two_delimited_strings)]
+    #[command(description = "⚖️ Compare two concepts side by side 🔍", parse_with = parsers::parse_two_delimited_strings)]
     Compare { concept1: String, concept2: String },
-    #[command(description = "summarize given text.")]
+    #[command(description = "📰 Summarize the given text into key points.")]
     Summarize(String),
-    #[command(description = "List all falshcards available for a given topic")]
+    #[command(description = "📂 List all flashcards available for a topic.")]
     List(String),
-    #[command(description = "Start a quiz using uploaded flashcards on a specific topic.")]
+    #[command(description = "🎯 Start a quiz using flashcards for a chosen topic.")]
     Quiz(String),
-    #[command(description = "Exit a quiz.")]
+    #[command(description = "🛑 Exit an ongoing quiz.")]
     Stop,
 }
 
@@ -528,5 +532,56 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                 .await?
         }
     };
+    Ok(())
+}
+
+async fn quiz_handler(bot: Bot, dialogue: QuizDialogue, msg: Message) -> HandlerResult {
+    let state = dialogue.get().await?;
+    if state.is_some() {
+        let mut quiz_manager = state.unwrap();
+        let msg_text = msg.text().unwrap();
+
+        if quiz_manager.check_answer(msg_text) {
+            bot.send_message(msg.chat.id, "✅ Your answer was correct")
+                .await?;
+        } else {
+            bot.send_message(msg.chat.id, "❌ Wrong answer").await?;
+        }
+
+        let next = quiz_manager.next_question();
+
+        if next.is_err() {
+            bot.send_message(
+                msg.chat.id,
+                "Your quiz is completed, but an error happened while storing quiz results.",
+            )
+            .await?;
+        } else {
+            let option_card = next.ok().and_then(|x| x);
+            if option_card.is_none() {
+                bot.send_message(
+                    msg.chat.id,
+                    "Your quiz is completed, you answered correctly x/x questions.",
+                )
+                .await?;
+            } else {
+                let card = option_card.unwrap();
+                bot.send_message(
+                    msg.chat.id,
+                    format!(
+                        "\nNext question:\n{}\n\nDifficulty: {}",
+                        card.question, card.difficulty
+                    ),
+                )
+                .await?;
+            }
+        }
+
+        dialogue.update(quiz_manager).await?;
+    } else {
+        bot.send_message(msg.chat.id, "No active quiz. Type /quiz to begin.")
+            .await?;
+    }
+
     Ok(())
 }
