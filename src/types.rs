@@ -9,13 +9,13 @@ pub struct FlashCardData {
     pub question: String,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct QuizData {
     user_id: i64,
     topic: String,
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct QuizManager {
     info: QuizData,
     current: usize,

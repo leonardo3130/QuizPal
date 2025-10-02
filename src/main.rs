@@ -6,7 +6,6 @@ use teloxide::{
 };
 
 type QuizDialogue = Dialogue<QuizManager, InMemStorage<QuizManager>>;
-type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
 use crate::types::{FlashCardData, QuizManager};
 
@@ -88,7 +87,21 @@ async fn main() {
 
     let bot = Bot::new(config.tg_key);
 
-    Command::repl(bot, answer).await;
+    Dispatcher::builder(
+        bot,
+        Update::filter_message()
+            .branch(dptree::entry().filter_command::<Command>().endpoint(answer))
+            .branch(
+                Update::filter_message()
+                    .enter_dialogue::<Message, InMemStorage<QuizManager>, QuizManager>()
+                    .endpoint(quiz_handler),
+            ),
+    )
+    .dependencies(dptree::deps![InMemStorage::<QuizManager>::new()]) //creates in memory storage (with empty QuizManager)
+    // .enable_ctrlc_handler()
+    .build()
+    .dispatch()
+    .await;
 }
 
 async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
@@ -315,10 +328,10 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                         user_stmt.next().is_ok()
                     };
 
-                    if user_exist {
+                    if !user_exist {
                         bot.send_message(
                             msg.chat.id,
-                            format!("You successfully created a flashcard"),
+                            format!("You need to register in order to crate a flashcard"),
                         )
                         .await?;
                     }
@@ -326,14 +339,15 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     let res: Result<(), sqlite::Error> = {
                         let db = db::get_db();
                         let mut statement = db
-                        .prepare("INSERT INTO flashcards (question, answer, topic, difficulty) VALUES (?,?,?,?)")
+                        .prepare("INSERT INTO flashcards (user_id, question, answer, topic, difficulty) VALUES (?,?,?,?,?)")
                         .unwrap();
 
-                        statement.bind((1, question.as_str())).unwrap();
-                        statement.bind((2, answer.as_str())).unwrap();
-                        statement.bind((3, topic.as_str())).unwrap();
+                        statement.bind((1, u.id.to_string().as_str())).unwrap();
+                        statement.bind((2, question.as_str())).unwrap();
+                        statement.bind((3, answer.as_str())).unwrap();
+                        statement.bind((4, topic.as_str())).unwrap();
                         statement
-                            .bind((4, difficulty.to_string().as_str()))
+                            .bind((5, difficulty.to_string().as_str()))
                             .unwrap();
 
                         match statement.next() {
@@ -344,14 +358,14 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     };
 
                     if res.is_ok() {
-                        bot.send_message(msg.chat.id, format!("Error while creating flashcard"))
-                            .await?
-                    } else {
                         bot.send_message(
                             msg.chat.id,
                             format!("You successfully created a flashcard"),
                         )
                         .await?
+                    } else {
+                        bot.send_message(msg.chat.id, format!("Error while creating flashcard",))
+                            .await?
                     }
                 }
                 None => {
@@ -374,41 +388,41 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                             .prepare(
                                 "
                                 SELECT question, answer, difficulty
+                                FROM flashcards
                                 WHERE topic = ? AND user_id = ?
                                 ORDER BY difficulty
                                 ",
                             )
                             .unwrap();
 
-                        statement.bind((1, u.id.to_string().as_str())).unwrap();
-                        statement.bind((2, topic.as_str())).unwrap();
+                        statement.bind((1, topic.as_str())).unwrap();
+                        statement.bind((2, u.id.to_string().as_str())).unwrap();
 
                         let mut rows: Vec<types::FlashCardData> = Vec::new();
 
                         loop {
                             match statement.next() {
                                 Ok(sqlite::State::Row) => {
-                                    debug!(
-                                        "question = {}",
-                                        statement.read::<String, _>("question").unwrap()
-                                    );
-                                    debug!(
-                                        "answer = {}",
-                                        statement.read::<String, _>("answrr").unwrap()
-                                    );
-                                    debug!(
-                                        "difficulty = {}",
-                                        statement.read::<i64, _>("difficulty").unwrap()
-                                    );
+                                    let question = statement.read::<String, _>("question").unwrap();
+                                    let answer = statement.read::<String, _>("answer").unwrap();
+                                    let difficulty =
+                                        statement.read::<i64, _>("difficulty").unwrap();
+
+                                    debug!("question = {}", question);
+                                    debug!("answer = {}", answer);
+                                    debug!("difficulty = {}", difficulty);
 
                                     rows.push(FlashCardData {
-                                        question: statement.read::<String, _>("question").unwrap(),
-                                        answer: statement.read::<String, _>("question").unwrap(),
-                                        difficulty: statement.read::<i64, _>("difficulty").unwrap(),
+                                        question,
+                                        answer,
+                                        difficulty,
                                     });
                                 }
                                 Ok(sqlite::State::Done) => break,
-                                Err(_) => break,
+                                Err(e) => {
+                                    eprintln!("Error reading row: {:?}", e);
+                                    break;
+                                }
                             }
                         }
 
@@ -428,7 +442,7 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
                     for (i, card) in cards.iter().enumerate() {
                         message.push_str(
                             format!(
-                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}",
+                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}\n\n",
                                 i + 1,
                                 card.question,
                                 card.answer,
@@ -535,8 +549,12 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
     Ok(())
 }
 
-async fn quiz_handler(bot: Bot, dialogue: QuizDialogue, msg: Message) -> HandlerResult {
-    let state = dialogue.get().await?;
+async fn quiz_handler(
+    bot: Bot,
+    dialogue: QuizDialogue,
+    msg: Message,
+) -> Result<(), teloxide::RequestError> {
+    let state = dialogue.get().await.unwrap();
     if state.is_some() {
         let mut quiz_manager = state.unwrap();
         let msg_text = msg.text().unwrap();
@@ -577,7 +595,7 @@ async fn quiz_handler(bot: Bot, dialogue: QuizDialogue, msg: Message) -> Handler
             }
         }
 
-        dialogue.update(quiz_manager).await?;
+        dialogue.update(quiz_manager).await.unwrap();
     } else {
         bot.send_message(msg.chat.id, "No active quiz. Type /quiz to begin.")
             .await?;
