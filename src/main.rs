@@ -5,7 +5,7 @@ use teloxide::{
     dispatching::dialogue::InMemStorage, prelude::*, types::ParseMode, utils::command::BotCommands,
 };
 
-type QuizDialogue = Dialogue<QuizManager, InMemStorage<QuizManager>>;
+type QuizDialogue = Dialogue<Option<QuizManager>, InMemStorage<Option<QuizManager>>>;
 
 use crate::types::{FlashCardData, QuizManager};
 
@@ -90,21 +90,27 @@ async fn main() {
     Dispatcher::builder(
         bot,
         Update::filter_message()
-            .branch(dptree::entry().filter_command::<Command>().endpoint(answer))
+            .branch(dptree::entry().filter_command::<Command>()
+                .enter_dialogue::<Message, InMemStorage<Option<QuizManager>>, Option<QuizManager>>()
+                .endpoint(answer))
             .branch(
                 Update::filter_message()
-                    .enter_dialogue::<Message, InMemStorage<QuizManager>, QuizManager>()
+                    .enter_dialogue::<Message, InMemStorage<Option<QuizManager>>, Option<QuizManager>>()
                     .endpoint(quiz_handler),
             ),
     )
-    .dependencies(dptree::deps![InMemStorage::<QuizManager>::new()]) //creates in memory storage (with empty QuizManager)
-    // .enable_ctrlc_handler()
+    .dependencies(dptree::deps![InMemStorage::<Option<QuizManager>>::new()]) //creates in memory storage (with empty QuizManager)
     .build()
     .dispatch()
     .await;
 }
 
-async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
+async fn answer(
+    bot: Bot,
+    msg: Message,
+    cmd: Command,
+    dialogue: QuizDialogue,
+) -> ResponseResult<()> {
     match cmd {
         Command::Help => {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
@@ -460,89 +466,82 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             }
         }
         Command::Quiz(topic) => {
-            let sender = msg.from;
-
-            match sender {
-                Some(u) => {
-                    let cards: Vec<FlashCardData> = {
-                        let db = db::get_db();
-                        let mut statement = db
-                            .prepare(
-                                "
-                                SELECT question, answer, difficulty
-                                WHERE topic = ? AND user_id = ?
-                                ORDER BY difficulty
-                                ",
-                            )
-                            .unwrap();
-
-                        statement.bind((1, u.id.to_string().as_str())).unwrap();
-                        statement.bind((2, topic.as_str())).unwrap();
-
-                        let mut rows: Vec<types::FlashCardData> = Vec::new();
-
-                        loop {
-                            match statement.next() {
-                                Ok(sqlite::State::Row) => {
-                                    debug!(
-                                        "question = {}",
-                                        statement.read::<String, _>("question").unwrap()
-                                    );
-                                    debug!(
-                                        "answer = {}",
-                                        statement.read::<String, _>("answrr").unwrap()
-                                    );
-                                    debug!(
-                                        "difficulty = {}",
-                                        statement.read::<i64, _>("difficulty").unwrap()
-                                    );
-
-                                    rows.push(FlashCardData {
-                                        question: statement.read::<String, _>("question").unwrap(),
-                                        answer: statement.read::<String, _>("question").unwrap(),
-                                        difficulty: statement.read::<i64, _>("difficulty").unwrap(),
-                                    });
-                                }
-                                Ok(sqlite::State::Done) => break,
-                                Err(_) => break,
-                            }
-                        }
-
-                        rows
-                    };
-
-                    let mut message: String = String::from("");
-
-                    if cards.len() == 0 {
-                        bot.send_message(
-                            msg.chat.id,
-                            format!("No flashcards found for topic {}", topic),
-                        )
-                        .await?;
-                    }
-
-                    for (i, card) in cards.iter().enumerate() {
-                        message.push_str(
-                            format!(
-                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}",
-                                i + 1,
-                                card.question,
-                                card.answer,
-                                card.difficulty
-                            )
-                            .as_str(),
-                        )
-                    }
-                    bot.send_message(msg.chat.id, message).await?
-                }
+            let u = match msg.from {
+                Some(ref u) => u,
                 None => {
-                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
-                        .await?
+                    bot.send_message(msg.chat.id, "Error while processing your request")
+                        .await?;
+                    return Ok(());
                 }
+            };
+
+            let user_exist = {
+                let db = db::get_db();
+                let query = "SELECT id FROM users WHERE id = ?";
+                let mut user_stmt = db.prepare(query).unwrap();
+                user_stmt.bind((1, u.id.0.to_string().as_str())).unwrap();
+                user_stmt.next().is_ok()
+            };
+
+            if !user_exist {
+                bot.send_message(msg.chat.id, "You need to register in order to do a quiz")
+                    .await?;
+                return Ok(());
             }
+
+            let state = dialogue.get().await.unwrap();
+
+            if state.is_some() && state.unwrap().is_some() {
+                bot.send_message(
+                    msg.chat.id,
+                    "Please finish your quiz before starting a new one",
+                )
+                .await?;
+                return Ok(());
+            }
+
+            let quiz_info = types::QuizData {
+                topic,
+                user_id: u.id.0,
+            };
+
+            let new_quiz_manager = types::QuizManager::new(quiz_info);
+
+            if dialogue.update(new_quiz_manager).await.is_err() {
+                bot.send_message(msg.chat.id, "An error occurred while starting the quiz")
+                    .await?;
+                return Ok(());
+            }
+
+            // Success message
+            bot.send_message(msg.chat.id, "When you are ready, enter any text to start!")
+                .await?
         }
         Command::Stop => {
-            bot.send_message(msg.chat.id, format!("Quiz stopped"))
+            let state = dialogue.get().await.unwrap();
+
+            if let Some(Some(mut manager)) = state {
+                if manager.save_quiz_result().is_err() {
+                    bot.send_message(msg.chat.id, "Error while saving quiz results to DB")
+                        .await?;
+                    return Ok(());
+                }
+            } else {
+                bot.send_message(
+                    msg.chat.id,
+                    "You cannot stop a quiz if you didn't even start one.",
+                )
+                .await?;
+                return Ok(());
+            }
+
+            if dialogue.update(None).await.is_err() {
+                bot.send_message(msg.chat.id, "An error occurred while ending the quiz.")
+                    .await?;
+                return Ok(());
+            }
+
+            bot.send_message(msg.chat.id, format!("Quiz stopped correctly."))
                 .await?
         }
     };
@@ -556,46 +555,62 @@ async fn quiz_handler(
 ) -> Result<(), teloxide::RequestError> {
     let state = dialogue.get().await.unwrap();
     if state.is_some() {
-        let mut quiz_manager = state.unwrap();
-        let msg_text = msg.text().unwrap();
+        if let Some(Some(mut quiz_manager)) = state {
+            let msg_text = msg.text().unwrap();
 
-        if quiz_manager.check_answer(msg_text) {
-            bot.send_message(msg.chat.id, "✅ Your answer was correct")
-                .await?;
-        } else {
-            bot.send_message(msg.chat.id, "❌ Wrong answer").await?;
-        }
+            if quiz_manager.is_new() {
+                bot.send_message(msg.chat.id, "First question is coming...")
+                    .await?;
+            } else if quiz_manager.check_answer(msg_text) {
+                bot.send_message(msg.chat.id, "✅ Your answer was correct")
+                    .await?;
+            } else {
+                bot.send_message(msg.chat.id, "❌ Wrong answer").await?;
+            }
 
-        let next = quiz_manager.next_question();
+            let next = quiz_manager.get_question();
 
-        if next.is_err() {
-            bot.send_message(
-                msg.chat.id,
-                "Your quiz is completed, but an error happened while storing quiz results.",
-            )
-            .await?;
-        } else {
-            let option_card = next.ok().and_then(|x| x);
-            if option_card.is_none() {
+            if next.is_err() {
                 bot.send_message(
                     msg.chat.id,
-                    "Your quiz is completed, you answered correctly x/x questions.",
+                    "Your quiz is completed, but an error happened while storing quiz results.",
                 )
                 .await?;
             } else {
-                let card = option_card.unwrap();
-                bot.send_message(
-                    msg.chat.id,
-                    format!(
-                        "\nNext question:\n{}\n\nDifficulty: {}",
-                        card.question, card.difficulty
-                    ),
-                )
-                .await?;
-            }
-        }
+                let option_card = next.ok().and_then(|x| x);
+                if option_card.is_none() {
+                    bot.send_message(
+                        msg.chat.id,
+                        format!(
+                            "Your quiz is completed, you answered correctly {}/{} questions.",
+                            quiz_manager.get_score(),
+                            quiz_manager.get_answered()
+                        ),
+                    )
+                    .await?;
 
-        dialogue.update(quiz_manager).await.unwrap();
+                    if dialogue.update(None).await.is_err() {
+                        bot.send_message(msg.chat.id, "An error occurred while ending the quiz.")
+                            .await?;
+                        return Ok(());
+                    }
+                } else {
+                    let card = option_card.unwrap();
+                    bot.send_message(
+                        msg.chat.id,
+                        format!(
+                            "\nNext question:\n{}\n\nDifficulty: {}",
+                            card.question, card.difficulty
+                        ),
+                    )
+                    .await?;
+                }
+            }
+            dialogue.update(quiz_manager).await.unwrap();
+        } else {
+            bot.send_message(msg.chat.id, "No active quiz. Type /quiz to begin.")
+                .await?;
+        }
     } else {
         bot.send_message(msg.chat.id, "No active quiz. Type /quiz to begin.")
             .await?;

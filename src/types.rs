@@ -11,8 +11,8 @@ pub struct FlashCardData {
 
 #[derive(Default, Clone)]
 pub struct QuizData {
-    user_id: i64,
-    topic: String,
+    pub user_id: u64,
+    pub topic: String,
 }
 
 #[derive(Default, Clone)]
@@ -23,6 +23,7 @@ pub struct QuizManager {
     total_questions: usize,
     answered_questions: usize,
     cards: Vec<FlashCardData>,
+    new: bool,
 }
 
 impl QuizManager {
@@ -33,16 +34,17 @@ impl QuizManager {
                 .prepare(
                     "
                     SELECT question, answer, difficulty
+                    FROM flashcards
                     WHERE topic = ? AND user_id = ?
                     ORDER BY difficulty
                                 ",
                 )
                 .unwrap();
 
+            statement.bind((1, info.topic.as_str())).unwrap();
             statement
-                .bind((1, info.user_id.to_string().as_str()))
+                .bind((2, info.user_id.to_string().as_str()))
                 .unwrap();
-            statement.bind((2, info.topic.as_str())).unwrap();
 
             let mut rows: Vec<FlashCardData> = Vec::new();
 
@@ -64,22 +66,25 @@ impl QuizManager {
             total_questions: cards.len(),
             answered_questions: 0,
             cards: cards,
+            new: true,
         }
     }
 
-    pub fn next_question(&mut self) -> Result<Option<&FlashCardData>, sqlite::Error> {
-        if self.current + 1 >= self.cards.len() {
+    pub fn get_question(&mut self) -> Result<Option<&FlashCardData>, sqlite::Error> {
+        if self.current >= self.cards.len() {
             return match self.save_quiz_result() {
                 Ok(_) => Ok(None),
                 Err(e) => Err(e),
             };
         }
+        let q = Ok(self.cards.get(self.current));
         self.current += 1;
-        Ok(self.cards.get(self.current))
+        q
     }
 
     pub fn check_answer(&mut self, input: &str) -> bool {
         let is_correct = input == self.cards.get(self.current).unwrap().answer;
+        self.answered_questions += 1;
         if is_correct {
             self.score += 1;
         }
@@ -96,10 +101,8 @@ impl QuizManager {
                     topic,
                     score,
                     total_questions,
-                    correct_questions,
-                    answered_questions,
+                    answered_questions
                 ) VALUES (
-                    ?,
                     ?,
                     ?,
                     ?,
@@ -120,16 +123,26 @@ impl QuizManager {
             .bind((4, self.total_questions.to_string().as_str()))
             .unwrap();
         statement
-            .bind((4, self.total_questions.to_string().as_str()))
-            .unwrap();
-        statement
-            .bind((5, self.score.to_string().as_str()))
-            .unwrap();
-        statement
             .bind((5, self.answered_questions.to_string().as_str()))
             .unwrap();
 
         statement.next()?;
         Ok(())
+    }
+
+    pub fn get_score(&mut self) -> usize {
+        self.score
+    }
+
+    pub fn get_answered(&mut self) -> usize {
+        self.answered_questions
+    }
+
+    pub fn is_new(&mut self) -> bool {
+        let prev = self.new;
+        if prev {
+            self.new = false
+        }
+        prev
     }
 }

@@ -60,3 +60,9 @@ In the following sections you will find some beautiful commands descriptions cre
 - **`/ask <question>`**
   Ask questions about your uploaded documents.
   Example: `/ask What are the key themes in Chapter 3?`
+
+### TODO
+
+- refactoring
+- mindmap
+- import and ask
