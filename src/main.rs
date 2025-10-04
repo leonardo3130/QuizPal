@@ -117,52 +117,51 @@ async fn answer(
                 .await?
         }
         Command::Register => {
-            let sender = msg.from;
-
-            match sender {
-                Some(u) => {
-                    // additional block to drop mutex before calling await
-                    {
-                        let db = db::get_db();
-                        let mut statement = db
-                            .prepare("INSERT INTO users (id, username, joined_at) VALUES (?,?,?)")
-                            .unwrap();
-
-                        statement.bind((1, u.id.to_string().as_str())).unwrap();
-                        statement
-                            .bind((
-                                2,
-                                u.username
-                                    .unwrap_or(String::from("anonymous_user"))
-                                    .as_str(),
-                            ))
-                            .unwrap();
-                        statement
-                            .bind((3, Local::now().to_rfc3339().as_str()))
-                            .unwrap();
-                        while let Ok(sqlite::State::Row) = statement.next() {
-                            debug!("id = {}", statement.read::<i64, _>("id").unwrap());
-                            debug!(
-                                "username = {}",
-                                statement.read::<String, _>("username").unwrap()
-                            );
-                            debug!(
-                                "joined on {}",
-                                statement.read::<String, _>("joined_at").unwrap()
-                            );
-                        }
-                    }
-                    bot.send_message(
-                        msg.chat.id,
-                        format!("You successfully registered on quiz pal"),
-                    )
-                    .await?
-                }
+            let u = match msg.from {
+                Some(u) => u,
                 None => {
-                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
-                        .await?
+                    bot.send_message(msg.chat.id, "Error while processing your request")
+                        .await?;
+                    return Ok(());
+                }
+            };
+
+            // additional block to drop mutex before calling await
+            {
+                let db = db::get_db();
+                let mut statement = db
+                    .prepare("INSERT INTO users (id, username, joined_at) VALUES (?,?,?)")
+                    .unwrap();
+
+                statement.bind((1, u.id.to_string().as_str())).unwrap();
+                statement
+                    .bind((
+                        2,
+                        u.username
+                            .unwrap_or(String::from("anonymous_user"))
+                            .as_str(),
+                    ))
+                    .unwrap();
+                statement
+                    .bind((3, Local::now().to_rfc3339().as_str()))
+                    .unwrap();
+                while let Ok(sqlite::State::Row) = statement.next() {
+                    debug!("id = {}", statement.read::<i64, _>("id").unwrap());
+                    debug!(
+                        "username = {}",
+                        statement.read::<String, _>("username").unwrap()
+                    );
+                    debug!(
+                        "joined on {}",
+                        statement.read::<String, _>("joined_at").unwrap()
+                    );
                 }
             }
+            bot.send_message(
+                msg.chat.id,
+                format!("You successfully registered on quiz pal"),
+            )
+            .await?
         }
         Command::Summarize(text) => {
             info!("{}", text);
@@ -320,150 +319,136 @@ async fn answer(
             topic,
             difficulty,
         } => {
-            let sender = msg.from;
-
-            match sender {
-                Some(u) => {
-                    let user_exist = {
-                        let db = db::get_db();
-
-                        let query = "SELECT id FROM users WHERE id = ?";
-                        let mut user_stmt = db.prepare(query).unwrap();
-                        user_stmt.bind((1, u.id.0.to_string().as_str())).unwrap();
-
-                        user_stmt.next().is_ok()
-                    };
-
-                    if !user_exist {
-                        bot.send_message(
-                            msg.chat.id,
-                            format!("You need to register in order to crate a flashcard"),
-                        )
-                        .await?;
-                    }
-
-                    let res: Result<(), sqlite::Error> = {
-                        let db = db::get_db();
-                        let mut statement = db
-                        .prepare("INSERT INTO flashcards (user_id, question, answer, topic, difficulty) VALUES (?,?,?,?,?)")
-                        .unwrap();
-
-                        statement.bind((1, u.id.to_string().as_str())).unwrap();
-                        statement.bind((2, question.as_str())).unwrap();
-                        statement.bind((3, answer.as_str())).unwrap();
-                        statement.bind((4, topic.as_str())).unwrap();
-                        statement
-                            .bind((5, difficulty.to_string().as_str()))
-                            .unwrap();
-
-                        match statement.next() {
-                            Ok(sqlite::State::Done) => Ok(()),
-                            Ok(sqlite::State::Row) => Ok(()),
-                            Err(e) => Err(e),
-                        }
-                    };
-
-                    if res.is_ok() {
-                        bot.send_message(
-                            msg.chat.id,
-                            format!("You successfully created a flashcard"),
-                        )
-                        .await?
-                    } else {
-                        bot.send_message(msg.chat.id, format!("Error while creating flashcard",))
-                            .await?
-                    }
-                }
+            let u = match msg.from {
+                Some(u) => u,
                 None => {
                     bot.send_message(
                         msg.chat.id,
                         format!("User ID not available, couldn't create flashcard"),
                     )
-                    .await?
+                    .await?;
+                    return Ok(());
                 }
+            };
+
+            let user_exist = {
+                let db = db::get_db();
+
+                let query = "SELECT id FROM users WHERE id = ?";
+                let mut user_stmt = db.prepare(query).unwrap();
+                user_stmt.bind((1, u.id.0.to_string().as_str())).unwrap();
+
+                user_stmt.next().is_ok()
+            };
+
+            if !user_exist {
+                bot.send_message(
+                    msg.chat.id,
+                    format!("You need to register in order to crate a flashcard"),
+                )
+                .await?;
+            }
+
+            let res: Result<(), sqlite::Error> = {
+                let db = db::get_db();
+                let mut statement = db
+                .prepare("INSERT INTO flashcards (user_id, question, answer, topic, difficulty) VALUES (?,?,?,?,?)")
+                .unwrap();
+
+                statement.bind((1, u.id.to_string().as_str())).unwrap();
+                statement.bind((2, question.as_str())).unwrap();
+                statement.bind((3, answer.as_str())).unwrap();
+                statement.bind((4, topic.as_str())).unwrap();
+                statement
+                    .bind((5, difficulty.to_string().as_str()))
+                    .unwrap();
+
+                match statement.next() {
+                    Ok(sqlite::State::Done) => Ok(()),
+                    Ok(sqlite::State::Row) => Ok(()),
+                    Err(e) => Err(e),
+                }
+            };
+
+            if res.is_ok() {
+                bot.send_message(msg.chat.id, format!("You successfully created a flashcard"))
+                    .await?
+            } else {
+                bot.send_message(msg.chat.id, format!("Error while creating flashcard",))
+                    .await?
             }
         }
         Command::List(topic) => {
-            let sender = msg.from;
-
-            match sender {
-                Some(u) => {
-                    let cards: Vec<FlashCardData> = {
-                        let db = db::get_db();
-                        let mut statement = db
-                            .prepare(
-                                "
-                                SELECT question, answer, difficulty
-                                FROM flashcards
-                                WHERE topic = ? AND user_id = ?
-                                ORDER BY difficulty
-                                ",
-                            )
-                            .unwrap();
-
-                        statement.bind((1, topic.as_str())).unwrap();
-                        statement.bind((2, u.id.to_string().as_str())).unwrap();
-
-                        let mut rows: Vec<types::FlashCardData> = Vec::new();
-
-                        loop {
-                            match statement.next() {
-                                Ok(sqlite::State::Row) => {
-                                    let question = statement.read::<String, _>("question").unwrap();
-                                    let answer = statement.read::<String, _>("answer").unwrap();
-                                    let difficulty =
-                                        statement.read::<i64, _>("difficulty").unwrap();
-
-                                    debug!("question = {}", question);
-                                    debug!("answer = {}", answer);
-                                    debug!("difficulty = {}", difficulty);
-
-                                    rows.push(FlashCardData {
-                                        question,
-                                        answer,
-                                        difficulty,
-                                    });
-                                }
-                                Ok(sqlite::State::Done) => break,
-                                Err(e) => {
-                                    eprintln!("Error reading row: {:?}", e);
-                                    break;
-                                }
-                            }
-                        }
-
-                        rows
-                    };
-
-                    let mut message: String = String::from("");
-
-                    if cards.len() == 0 {
-                        bot.send_message(
-                            msg.chat.id,
-                            format!("No flashcards found for topic {}", topic),
-                        )
-                        .await?;
-                    }
-
-                    for (i, card) in cards.iter().enumerate() {
-                        message.push_str(
-                            format!(
-                                "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}\n\n",
-                                i + 1,
-                                card.question,
-                                card.answer,
-                                card.difficulty
-                            )
-                            .as_str(),
-                        )
-                    }
-                    bot.send_message(msg.chat.id, message).await?
-                }
+            let u = match msg.from {
+                Some(u) => u,
                 None => {
-                    bot.send_message(msg.chat.id, format!("Error while processign your request "))
-                        .await?
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("User ID not available, couldn't create flashcard"),
+                    )
+                    .await?;
+                    return Ok(());
                 }
+            };
+
+            let cards: Vec<FlashCardData> = {
+                let db = db::get_db();
+                let mut statement = db
+                    .prepare(
+                        "
+                        SELECT question, answer, difficulty
+                        FROM flashcards
+                        WHERE topic = ? AND user_id = ?
+                        ORDER BY difficulty
+                    ",
+                    )
+                    .unwrap();
+
+                statement.bind((1, topic.as_str())).unwrap();
+                statement.bind((2, u.id.to_string().as_str())).unwrap();
+
+                let mut rows = Vec::new();
+                while let Ok(sqlite::State::Row) = statement.next() {
+                    let question = statement.read::<String, _>("question").unwrap();
+                    let answer = statement.read::<String, _>("answer").unwrap();
+                    let difficulty = statement.read::<i64, _>("difficulty").unwrap();
+
+                    debug!("question = {}", question);
+                    debug!("answer = {}", answer);
+                    debug!("difficulty = {}", difficulty);
+
+                    rows.push(FlashCardData {
+                        question,
+                        answer,
+                        difficulty,
+                    });
+                }
+                rows
+            };
+
+            let mut message: String = String::from("");
+
+            if cards.len() == 0 {
+                bot.send_message(
+                    msg.chat.id,
+                    format!("No flashcards found for topic {}", topic),
+                )
+                .await?;
             }
+
+            for (i, card) in cards.iter().enumerate() {
+                message.push_str(
+                    format!(
+                        "Flashcard {}\nQuestion:\n{}\nAnswer:\n{}\nDifficulty (1-10): {}\n\n",
+                        i + 1,
+                        card.question,
+                        card.answer,
+                        card.difficulty
+                    )
+                    .as_str(),
+                )
+            }
+            bot.send_message(msg.chat.id, message).await?
         }
         Command::Quiz(topic) => {
             let u = match msg.from {
