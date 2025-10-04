@@ -54,6 +54,7 @@ impl QuizManager {
                     answer: statement.read::<String, _>("question").unwrap(),
                     difficulty: statement.read::<i64, _>("difficulty").unwrap(),
                 });
+                info!("hello");
             }
 
             rows
@@ -83,7 +84,8 @@ impl QuizManager {
     }
 
     pub fn check_answer(&mut self, input: &str) -> bool {
-        let is_correct = input == self.cards.get(self.current).unwrap().answer;
+        let correct_answer: &String = &self.cards.get(self.current - 1).unwrap().answer;
+        let is_correct = input == correct_answer;
         self.answered_questions += 1;
         if is_correct {
             self.score += 1;
@@ -140,7 +142,7 @@ impl QuizManager {
 
     pub fn is_new(&mut self) -> bool {
         let prev = self.new;
-        if prev {
+        if prev == true {
             self.new = false
         }
         prev
