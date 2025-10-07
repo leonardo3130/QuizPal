@@ -14,15 +14,15 @@ In the following sections you will find some beautiful commands descriptions cre
 
 ## 🔹 Core Commands
 
-- **`/flashcard <question> | <answer>`**
+- **`/flashcard <question> | <answer> | <topic> | <difficulty (1-10)>`**
   Save a flashcard.
-  Example: `/flashcard Capital of France | Paris`
+  Example: `/flashcard Capital of France | Paris | geography | 2`
 
 - **`/list <topic>`**
   List all saved flashcards for a topic.
 
-- **`/quiz`**
-  Start a quiz session with your saved flashcards.
+- **`/quiz <topic>`**
+  Start a quiz session with your saved flashcards on a given topic.
 
 - **`/summarize <text>`**
   Summarize pasted text, notes, or documents.
@@ -42,11 +42,11 @@ In the following sections you will find some beautiful commands descriptions cre
   Quick definition of a specific term.
   Example: `/define entropy`
 
-- **`/compare <item1> <item2>`**
+- **`/compare <item1> | <item2>`**
   Compare two concepts side by side.
   Example: `/compare mitosis meiosis`
 
-- **`/translate <language> <text>`**
+- **`/translate <language> | <text>`**
   Translate notes or concepts into another language.
   Example: `/translate Spanish Photosynthesis is the process...`
 
@@ -63,6 +63,5 @@ In the following sections you will find some beautiful commands descriptions cre
 
 ### TODO
 
-- refactoring
 - mindmap
 - import and ask
